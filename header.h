@@ -42,7 +42,6 @@ struct Vec3D{
   Vec3D operator /(double s) const{
     return {x/s, y/s, z/s};
   }
-
 };
 
 inline Vec3D operator *(double s, const Vec3D &v){

@@ -9,19 +9,18 @@ const int METHOD = 1;
 /******************config********************/
 
 /******************計算条件********************/
-const double beta = 0.0;
-// const double beta = M_PI/10;
+// const double beta = 0.0;
+const double beta = M_PI/10;
 // スピンパラメータ
 const double a_spin = 1.0;
 const int N_particle = 50;
-const double r0_ring = 10.0;
-const int nt = 1000001;
-const int dn = 10000;
-double tmin = 0.0;
+const double r0_ring = 6.0;
+const int nt = 100001;
+const int dn = 1000;
 double tmax = 2.0*M_PI*std::pow(r0_ring, 1.5)*5.2;
 // double tmax = M_PI/(2.0*a_spin)*10;
 // double tmax = M_PI/(2.0*a_spin)*r0_ring*r0_ring*r0_ring*3;
-double dt = (tmax-tmin)/double(nt-1);
+double dt = tmax/double(nt-1);
 /******************計算条件********************/
 
 int main(){
@@ -29,7 +28,7 @@ int main(){
   clock_t start_t, end_t;
   start_t = time(NULL);
 
-  double t = tmin;
+  double t = 0.0;
   Particle_list P_list(N_particle);
   output_data output;
 
@@ -59,9 +58,10 @@ void init_particle(Particle_list &P_list){
     double phi, r0, v0, x, y, z;
     for(int i = 0; i < N_particle; i++) {
       r0 = r0_ring;
-      v0 = 1.0/std::sqrt(r0_ring);
+      // v0 = 1.0/std::sqrt(r0_ring);
       // v0 = 4.0*a_spin*r0;
       // v0 = 4.0*a_spin/(r0*r0);
+      v0 = (2.0*a_spin+std::sqrt(4.0*a_spin*a_spin+r0*r0*r0))/(r0*r0);
       phi = 2.0*M_PI*i/N_particle;
       P_list[i].r = {r0*std::cos(phi), r0*std::cos(beta)*std::sin(phi), 
                           r0*std::sin(beta)*std::sin(phi)};
