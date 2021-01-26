@@ -10,7 +10,8 @@ header.h.gch : header.h
 	g++ $(gcc_options) -x c++-header -o $@ $<
 
 run : a.out
-	./a.out
+	# ./a.out
+	./run.sh
 
 clean :
 	rm -f header.h.gch

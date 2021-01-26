@@ -1,4 +1,4 @@
-*.csv
+output/*/*.csv
 *.out
 *.mp4
 *.gif

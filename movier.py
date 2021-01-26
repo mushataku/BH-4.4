@@ -14,102 +14,118 @@ import os
 ##########CONFIG###########
 # 0:plt 1:mp4 2:gif
 SAVE = 1
-
 a_spin = 1.0
-N_particle = 50
-N_color = N_particle
-r0 = 10.0
-Tg = 2*pi*r0**1.5
+beta_deg = 15.0
+beta = beta_deg/180.0*pi
+
+Rmin,Rmax,dr = 12.0, 15.0, 0.2
+r_list = np.arange(Rmin,Rmax+dr,dr)
+N_ring = len(r_list)
+# 各 ring に含まれる粒子数のリスト
+Num_list = [int(50*(r_list[i]/10)) for i in range(N_ring)]
+
+skip = N_ring//5
+R_Tg = 10.0
+Tg = 2*pi*R_Tg**1.5
 ###########################
 
 ################### variable ##################
-FILE_PATH = './figs/animation'
-df = pd.read_csv("./output/position.csv")
-T = df["time"]
+SAVE_PATH = './figs/ani_a%.1fbeta%.1f_r%.1f-r%.1f'%(a_spin, beta_deg, Rmin, Rmax)
+DIR_PATH = "./output/a%.1fbeta%.1f/a%.1fbeta%.1f"%(a_spin, beta_deg, a_spin, beta_deg)
+T = pd.read_csv("%sr%.1f.csv"%(DIR_PATH, Rmin))["time"]
 ################### variable ##################
 
 
 #########################描画のための関数#########################
 
 # frame 枚目の写真を作るデータを取得
-def get_data(df):
-  xyz_list = []
-  for i in range(N_particle):
-    x = df["x%d"%i]
-    y = df["y%d"%i]
-    z = df["z%d"%i]
-    xyz_list.append([x,y,z])
-  return xyz_list
+def get_data():
+  ring_list = [] #ring_list[ring][particle][xyz][frame]
+  for i_ring in range(N_ring):
+    df = pd.read_csv("%sr%.1f.csv"%(DIR_PATH, r_list[i_ring]))
+    xyz_list = []
+    for i_particle in range(Num_list[i_ring]):
+      x = df["x%d"%i_particle]
+      y = df["y%d"%i_particle]
+      z = df["z%d"%i_particle]
+      xyz_list.append([x,y,z])
+    ring_list.append(xyz_list)
+  return ring_list
+
+# リング i_ring の各運動量ベクトルを返す
+def get_L():
+  L_list = [] # L_list[ring][xyz][frame]
+  for i_ring in range(N_ring):
+    if(i_ring%skip != skip-1): continue
+    # その半径の ring の 0 番目の粒子の角運動量ベクトルを求める
+    df = pd.read_csv("%sr%.1f.csv"%(DIR_PATH, r_list[i_ring]))
+    x = 3*np.array(df["x%d"%0])
+    y = 3*np.array(df["y%d"%0])
+    z = 3*np.array(df["z%d"%0])
+    vx = 3*np.array(df["vx%d"%0])
+    vy = 3*np.array(df["vy%d"%0])
+    vz = 3*np.array(df["vz%d"%0])
+    L_list.append([y*vz-z*vy, z*vx-x*vz, x*vy-y*vx])
+  return L_list
 
 # 初期画像を設定
-def init_ax(ax,xyz_list):
+def init_ax(ax,ring_list):
 
-  ax.set(xlim=(-r0,r0),ylim=(-r0,r0),zlim=(-2,2))
-  ax.set(xlim=(-r0,r0),ylim=(-r0,r0),zlim=(-r0,r0))
+  ax.set(xlim=(-Rmax,Rmax),ylim=(-Rmax,Rmax),zlim=(-Rmax/3,Rmax/3))
+  # ax.set(xlim=(-Rmax,Rmax),ylim=(-Rmax,Rmax),zlim=(-Rmax,Rmax))
 
+  # ring_list[ring][particle][xyz][frame]
   line_list = []
-  for i in range(N_particle):
-    x = xyz_list[i][0][0]
-    y = xyz_list[i][1][0]
-    z = xyz_list[i][2][0]
-    if(i%N_color == 0):
-      line, = ax.plot([x],[y],[z],'o',color='r')
-    else:
-      line, = ax.plot([x],[y],[z],'o', color='black')
-    line_list.append(line)
-  # ax.legend()
-
-  x = np.linspace(-r0, r0, 5)
-  y = np.linspace(-r0, r0, 5)
+  for i_ring, R in enumerate(r_list):
+    R_norm = (R - Rmin)/(Rmax-Rmin)
+    for i_particle in range(Num_list[i_ring]):
+      x = ring_list[i_ring][i_particle][0][0]
+      y = ring_list[i_ring][i_particle][1][0]
+      z = ring_list[i_ring][i_particle][2][0]
+      if(i_particle == 0):
+        line, = ax.plot([x],[y],[z],'o',color=cm.jet(R_norm), alpha=1.0 ,label="r = %.1f"%R)
+      else:
+        line, = ax.plot([x],[y],[z],'o', color=cm.jet(R_norm), alpha=0.5)
+      line_list.append(line)
+  
+  ax.legend()
+  
+  # xy 平面と z 軸のプロット
+  x = np.linspace(-Rmax, Rmax, 5)
+  y = np.linspace(-Rmax, Rmax, 5)
   X, Y = np.meshgrid(x, y)
   Z = 0*X
   ax.plot_surface(X, Y, Z, alpha=0.3)
-  ax.plot([0,0,0],[0,0,0],[-r0,0,r0],"-", color="black")
+  ax.plot([0,0,0],[0,0,0],[-Rmax,0,Rmax],"-", color="black")
   return line_list
 
-def normal_ax(ax,xyz_list):
-  x1 = xyz_list[0][0][0]
-  y1 = xyz_list[0][1][0]
-  z1 = xyz_list[0][2][0]
-  x2 = xyz_list[1][0][0]
-  y2 = xyz_list[1][1][0]
-  z2 = xyz_list[1][2][0]
+# 法線ベクトル
+def L_initial(ax, L_list):
+  line_L_list = []
+  for i,L in enumerate(L_list):
+    # L_list[ring][xyz][frame]
+    R_norm = (r_list[i] - Rmin)/(Rmax-Rmin)
+    line, = ax.plot([-L[0][0],0,L[0][0]],[-L[1][0],0,L[1][0]],[-L[2][0],0,L[2][0]],'-', color=cm.jet(R_norm))
+    line_L_list.append(line)
 
-  x = y1*z2-y2*z1
-  y = z1*x2-z2*x1
-  z = x1*y2-x2*y1
-  if(z < 0):
-    x = -x
-    y = -y
-    z = -z
-  line, = ax.plot([-x,0,x],[-y,0,y],[-z,0,z],'-', color='black')
-  return line
+  return line_L_list
 
 # データ更新
-def reset_data(line_list,line_n,frame,xyz_list):
-  for i in range(len(line_list)):
-    line_list[i].set_data(xyz_list[i][0][frame],xyz_list[i][1][frame])
-    line_list[i].set_3d_properties(xyz_list[i][2][frame])
+def reset_data(line_list,line_L_list,frame,ring_list):
+  cnt = 0
+  # 位置の更新
+  for i_ring in range(N_ring):
+    for i_particle in range(Num_list[i_ring]):
+      line_list[cnt].set_data(ring_list[i_ring][i_particle][0][frame],ring_list[i_ring][i_particle][1][frame])
+      line_list[cnt].set_3d_properties(ring_list[i_ring][i_particle][2][frame])
+      cnt += 1
   
-  x1 = xyz_list[0][0][frame]
-  y1 = xyz_list[0][1][frame]
-  z1 = xyz_list[0][2][frame]
-  x2 = xyz_list[1][0][frame]
-  y2 = xyz_list[1][1][frame]
-  z2 = xyz_list[1][2][frame]
+  # 角運動量ベクトルの更新
+  for i,L in enumerate(L_list):
+    line_L_list[i].set_data([-L[0][frame],0,L[0][frame]],[-L[1][frame],0,L[1][frame]])
+    line_L_list[i].set_3d_properties([-L[2][frame],0,L[2][frame]])
 
-  x = (y1*z2-y2*z1)
-  y = (z1*x2-z2*x1)
-  z = (x1*y2-x2*y1)
-  if(z < 0):
-    x = -x
-    y = -y
-    z = -z
   
-  
-
-  line_n.set_data([-x,0,x],[-y,0,y])
-  line_n.set_3d_properties([-z,0,z])  
 
 #########################描画のための関数#########################
 
@@ -121,7 +137,6 @@ def reset_data(line_list,line_n,frame,xyz_list):
 
 # Attaching 3D axis to the figure
 fig = plt.figure(figsize=(8,6))
-# fig.subplots_adjust(left=0.2)
 ax = fig.gca(projection='3d')
 
 time_text = fig.text(0.01, 0.99, '', size=20, color="white", horizontalalignment='left',
@@ -130,9 +145,11 @@ fig.text(0, 0.01, r"a = %.2f"%a_spin,
           backgroundcolor="black",color="white", size=20)
 
 #### アニメの初期画像生成
-xyz_list = get_data(df)
-line_list = init_ax(ax,xyz_list)
-line_n = normal_ax(ax,xyz_list)
+
+ring_list = get_data() #ring_list[ring][particle][xyz][frame]
+line_list = init_ax(ax,ring_list)
+L_list = get_L()
+line_L_list = L_initial(ax,L_list)
 time_text.set_text("time = 0.000")
 
 #### 画像更新用関数
@@ -140,8 +157,8 @@ def animate(frame):
   if(frame == 0):
     return
   print("frame:",frame)
-  reset_data(line_list,  line_n, frame, xyz_list)
-  time_text.set_text(r"time = %.3e Tg"%(T[frame]/Tg))
+  reset_data(line_list,  line_L_list, frame, ring_list)
+  time_text.set_text(r"time = %.3e Tg for r=%.1f"%(T[frame]/Tg, R_Tg))
 
 ani = FuncAnimation(fig, animate, frames=96
               , interval=200, repeat=True, blit=False)
@@ -150,8 +167,8 @@ ani = FuncAnimation(fig, animate, frames=96
 if(SAVE == 0):
     plt.show()
 if(SAVE == 1):
-    ani.save(FILE_PATH+".mp4", writer="ffmpeg", fps=5)
+    ani.save(SAVE_PATH+".mp4", writer="ffmpeg", fps=5)
 if(SAVE == 2):
-    ani.save(FILE_PATH+".gif", writer='pillow')
+    ani.save(SAVE_PATH+".gif", writer='pillow')
 
 

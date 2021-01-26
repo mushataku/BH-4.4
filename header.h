@@ -57,32 +57,41 @@ inline Vec3D operator%(const Vec3D& u,const Vec3D& v){
 	return w;
 }
 
-struct Particle{
-  Vec3D r;
-  Vec3D v;
-  // デフォルトコンストラクタ
-  Particle() = default;
+class Particle_list{
+protected:
+  class Particle;
+  char FILE_PATH[100];
+  void init_file();
+  void init_particles();
+public:
+  std::vector<Particle> P_list;
+  Particle_list(int n){
+    P_list = std::vector<Particle>(n);
+    init_file();
+    init_particles();
+  }
+  void output(double t);
 };
 
-using Particle_list = std::vector<Particle>;
-
-struct output_data{
-private:
-  const char *FILE_PATH = "./output/position.csv";
-  void init();
+class Particle_list::Particle{
 public:
-  output_data();
-  void write(Particle_list const &P_list, double t);
-  void calc_time(int t);
+  Vec3D r;
+  Vec3D v;
+  double Energy() const{
+    return 0.5*v.length()*v.length()-1.0/r.length();    
+  }
+  Particle() = default;
+  void init(double r0, double phi);
 };
 
 // z 方向単位ベクトル
 const Vec3D e_z = {0,0,1};
 
 Vec3D force(Vec3D const &r, Vec3D const &v);
-void init_particle(Particle_list &P_list);
 void update(Particle_list &P_list, double &t, double dt);
 void euler(Vec3D &r, Vec3D &v, double dt);
 void runge_kutta(Vec3D &r, Vec3D &v, double dt);
+void calc_time(int t);
+double cot(double x);
 
 #endif
